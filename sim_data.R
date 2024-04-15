@@ -17,9 +17,9 @@ beta <- c(2, 0.5, 4, sqrt(6), -3)
 for(i in 1:K){
   sim_data <- data.frame()
   x <- mvrnorm(N, rep(0, d), Sigma)
-  Ep <- rnorm(1, 0, 5)
+  Ep <- rnorm(1, 0, 10)
   epsilon <- rnorm(N, Ep, 1)
   y <- x %*% beta + epsilon
   sim_data <- rbind(sim_data, data.frame(y, x))
-  write.csv(sim_data, paste("dataset/sim_data_", i, ".csv", sep = ""), row.names = FALSE)
+  write.csv(sim_data, paste("dataset/sim_data/sim_data_", i, ".csv", sep = ""), row.names = FALSE)
 }
