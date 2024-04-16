@@ -16,17 +16,22 @@ del.doc <- function(max_iter=2, tol=1e-4, Omega_list_1, Omega_list_2, beta_init,
   
   beta_new <- matrix(0, K, d)
   t_new <- matrix(0, K, d)
+  diff.record <- c()
   
   diff <- Inf
   iter <- 0
   while (iter < max_iter & diff > tol){
     iter <- iter + 1
-    for(i in 1:K){
-      res <- site_update_param(beta_init = beta_init[i,], t_init = t_init[i,], Omega1 = Omega_list_1[[i]], Omega2 = Omega_list_2[[i]], u = u[i,], u2 = u2[i,], 
-                               X_list[[i]], Y_list[[i]], a = a, b= b, N = N)
-      beta_new[i,] <- res$beta
-      t_new[i,] <- res$t
+    
+    # Parallel loop using foreach
+    results <- foreach(i = 1:K, .combine = 'rbind') %dopar% {
+      res <- site_update_param(beta_init[i,], t_init[i,], Omega_list_1[[i]], Omega_list_2[[i]], 
+                               u[i,], u2[i,], x = X_list[[i]], y = Y_list[[i]], a, b, N=N)
+      c(res$beta, res$t)  # Combine beta and t into a single vector to return
     }
+    
+    beta_new <- results[, 1:ncol(beta_init)]
+    t_new <- results[, (ncol(beta_init) + 1):ncol(results)]
     
     a_sum <- rep(0, d); b_sum <- rep(0, d); a_denom <- matrix(0, d, d); b_denom <- matrix(0, d, d)
     for(i in 1:K){
@@ -39,22 +44,31 @@ del.doc <- function(max_iter=2, tol=1e-4, Omega_list_1, Omega_list_2, beta_init,
     a <- (solve(a_denom) %*% a_sum)[,1]
     b <- (solve(b_denom) %*% b_sum)[,1]
     
-    print(a)
-    
     for(i in 1:K){
       u[i,] <- beta_new[i,] - a + u[i,]
       u2[i,] <- t_new[i,] - b + u2[i,]
     }
     
     # check convergence
-    if(max(abs(beta_new - beta_init)) < tol & max(abs(t_new - t_init)) < tol){
-      break
-    }
+    
+    diff <- max(max(abs(beta_new - beta_init)), max(abs(t_new - t_init)))
+    diff.record <- c(diff.record, diff)
     
     beta_init <- beta_new
     t_init <- t_new
-    print(paste("iter: ", iter))
+    
+    if(iter %% 10 == 0){
+      print(paste("Iteration: ", iter))
+      print(a)
+      print(diff)
+    }
   }
   stopImplicitCluster()
-  return(list(beta=beta_new, t=t_new, a=a, b=b, u=u, u2=u2))
+  
+  if(tol>diff){
+    conv <- TRUE
+  } else {
+    conv <- FALSE
+  }
+  return(list(beta=beta_new, t=t_new, a=a, b=b, u=u, u2=u2, diff=diff.record, converged=conv))
 }
